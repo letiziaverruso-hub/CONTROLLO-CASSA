@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controllo Cassa</title>
+    <!-- Caricamento di Tailwind CSS per lo styling responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Configurazione del font Inter */
+        html { font-family: 'Inter', sans-serif; }
+        /* Stili per rimuovere le frecce dagli input di tipo number */
+        input[type='number']::-webkit-inner-spin-button,
+        input[type='number']::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type='number'] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 flex justify-center py-4">
+
+    <div id="app-container" class="w-full max-w-4xl p-4 sm:p-6">
+        
+        <!-- Header e Selettore Negozio -->
+        <div class="bg-white shadow-lg rounded-xl p-4 mb-6 sticky top-0 z-10">
+            <h1 class="text-3xl font-extrabold text-indigo-700 text-center mb-4">
+                Controllo Cassa - Versione Semplice
+            </h1>
+
+            <!-- Selettore Negozi (Usa localStorage per salvare i dati per ogni negozio) -->
+            <div class="flex justify-center space-x-2 sm:space-x-4 mb-4" id="shop-selector">
+                <!-- I pulsanti vengono aggiunti qui dal JavaScript -->
+            </div>
+        </div>
+
+        <!-- Corpo Principale -->
+        <div class="bg-white shadow-xl rounded-2xl p-4 sm:p-8">
+
+            <!-- 1. Conteggio Denominazioni -->
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">
+                Cassa Attuale (<span id="current-shop-display">Montesarchio</span>)
+            </h2>
+
+            <div id="denominations-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <!-- Gli input vengono aggiunti qui dal JavaScript -->
+            </div>
+
+            <!-- 2. Totali Cassa -->
+            <div class="mb-8 p-4 sm:p-6 bg-gray-100 rounded-xl shadow-inner">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Riepilogo Cassa</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                    <div class="p-3 bg-indigo-100 rounded-lg">
+                        <p class="text-sm text-indigo-700">Totale Monete</p>
+                        <p id="total-coins" class="text-2xl font-bold text-gray-900">0,00 €</p>
+                    </div>
+                    <div class="p-3 bg-purple-100 rounded-lg">
+                        <p class="text-sm text-purple-700">Totale Banconote</p>
+                        <p id="total-banknotes" class="text-2xl font-bold text-gray-900">0,00 €</p>
+                    </div>
+                    <div class="p-3 bg-green-200 rounded-lg">
+                        <p class="text-sm text-green-700">Totale Cassa</p>
+                        <p id="grand-total" class="text-3xl font-extrabold text-green-900">0,00 €</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Fondo Cassa e Incasso Giornaliero -->
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">
+                Calcolo Incasso Giornaliero
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
+                <!-- Fondo Cassa Input -->
+                <div class="p-4 bg-yellow-50 rounded-lg shadow-md">
+                    <label for="cash-fund-input" class="block text-lg font-medium text-yellow-800 mb-2">
+                        Fondo Cassa Iniziale (€)
+                    </label>
+                    <input
+                        id="cash-fund-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value="0"
+                        onfocus="clearOnFocus(this)"
+                        onblur="resetOnBlur(this, 'fund')"
+                        oninput="updateFund(this.value)"
+                        class="w-full p-3 border-2 border-yellow-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 transition duration-150 text-xl font-bold text-gray-800"
+                    >
+                </div>
+
+                <!-- Incasso Giornaliero Output -->
+                <div class="p-4 bg-red-100 rounded-lg shadow-md">
+                    <p class="text-lg font-medium text-red-800 mb-2">
+                        Incasso del Giorno (Totale Cassa - Fondo)
+                    </p>
+                    <p id="daily-earnings" class="text-4xl font-extrabold text-red-900">
+                        0,00 €
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tasti Azzeramento e Stato -->
+            <div class="mt-8 pt-6 border-t border-gray-200 flex justify-center space-x-4">
+                <button
+                    onclick="resetRegister()"
+                    class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg transform transition duration-200 hover:scale-105 active:scale-95 flex items-center"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Azzeramento Dati
+                </button>
+            </div>
+            
+            <div id="status-message" class="mt-4 p-3 rounded-lg text-sm font-medium text-center hidden"></div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- Configurazione Iniziale ---
+        // Nomi dei negozi aggiornati su richiesta dell'utente
+        const SHOP_NAMES = ['Montesarchio', 'Benevento', 'Rotondi'];
+        const COIN_VALUES = [0.05, 0.10, 0.20, 0.50, 1.00, 2.00];
+        const BANKNOTE_VALUES = [5, 10, 20, 50];
+        const ALL_DENOMINATIONS = [...COIN_VALUES, ...BANKNOTE_VALUES].map(v => v.toString());
+        
+        let currentShop = SHOP_NAMES[0];
+        
+        // Struttura dati per un singolo negozio
+        let registerData = {
+            denominations: {}, // Es: {'1': 5, '0.5': 2}
+            fund: 0
+        };
+
+        // --- Funzioni di Utility ---
+
+        function formatCurrency(value) {
+            // Arrotonda a due decimali e formatta come valuta
+            return (Math.round(value * 100) / 100).toLocaleString('it-IT', { 
+                style: 'currency', 
+                currency: 'EUR' 
+            });
+        }
+        
+        function formatValue(value) {
+            const num = parseFloat(value);
+            return num >= 1 ? num.toFixed(0) : num.toFixed(2).replace('0.', '').padEnd(2, '0');
+        }
+
+        function setStatus(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = `mt-4 p-3 rounded-lg text-sm font-medium text-center ${type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+            statusDiv.classList.remove('hidden');
+            setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+        }
+
+        // --- Logica Memoria (localStorage) ---
+
+        function getStorageKey(shopName) {
+            // Usa il nome del negozio per la chiave di archiviazione
+            return `cash_register_data_${shopName.replace(/\s/g, '_')}`;
+        }
+
+        function saveData() {
+            try {
+                const key = getStorageKey(currentShop);
+                localStorage.setItem(key, JSON.stringify(registerData));
+            } catch (e) {
+                console.error("Errore nel salvataggio dei dati", e);
+                setStatus("Errore nel salvataggio locale dei dati.", 'error');
+            }
+        }
+
+        function loadData(shopName) {
+            const key = getStorageKey(shopName);
+            const savedData = localStorage.getItem(key);
+            
+            const defaultDenominations = {};
+            ALL_DENOMINATIONS.forEach(val => defaultDenominations[val] = 0);
+
+            if (savedData) {
+                try {
+                    registerData = JSON.parse(savedData);
+                    // Assicurati che tutti i campi esistano
+                    if (!registerData.denominations) registerData.denominations = defaultDenominations;
+                    if (registerData.fund === undefined) registerData.fund = 0;
+                } catch (e) {
+                    console.error("Errore nel parsing dei dati salvati", e);
+                    registerData = { denominations: defaultDenominations, fund: 0 };
+                }
+            } else {
+                registerData = { denominations: defaultDenominations, fund: 0 };
+            }
+
+            // Aggiorna l'UI
+            currentShop = shopName;
+            updateUI();
+        }
+
+        // --- Logica Calcoli ---
+
+        function calculateTotals() {
+            let totalCoins = 0;
+            let totalBanknotes = 0;
+
+            for (const value of COIN_VALUES) {
+                const key = value.toString();
+                const quantity = registerData.denominations[key] || 0;
+                totalCoins += quantity * value;
+            }
+
+            for (const value of BANKNOTE_VALUES) {
+                const key = value.toString();
+                const quantity = registerData.denominations[key] || 0;
+                totalBanknotes += quantity * value;
+            }
+
+            // Arrotonda per correggere gli errori di floating point in JS
+            const grandTotal = Math.round((totalCoins + totalBanknotes) * 100) / 100;
+            const dailyEarnings = Math.round((grandTotal - registerData.fund) * 100) / 100;
+
+            // Aggiorna i display
+            document.getElementById('total-coins').textContent = formatCurrency(totalCoins);
+            document.getElementById('total-banknotes').textContent = formatCurrency(totalBanknotes);
+            document.getElementById('grand-total').textContent = formatCurrency(grandTotal);
+            document.getElementById('daily-earnings').textContent = formatCurrency(dailyEarnings);
+        }
+
+        // --- Logica Interfaccia Utente ---
+
+        function updateUI() {
+            document.getElementById('current-shop-display').textContent = currentShop;
+            
+            // Aggiorna tutti gli input delle denominazioni
+            ALL_DENOMINATIONS.forEach(valueKey => {
+                const input = document.getElementById(`den-${valueKey}`);
+                if (input) {
+                    input.value = registerData.denominations[valueKey] !== undefined 
+                        ? registerData.denominations[valueKey].toString() 
+                        : '0';
+                }
+            });
+
+            // Aggiorna l'input del fondo cassa
+            const fundInput = document.getElementById('cash-fund-input');
+            if (fundInput) {
+                fundInput.value = registerData.fund.toFixed(2);
+            }
+
+            // Ricalcola e aggiorna i totali
+            calculateTotals();
+            updateShopButtons();
+        }
+
+        function updateShopButtons() {
+            const buttons = document.querySelectorAll('#shop-selector button');
+            buttons.forEach(button => {
+                const shopName = button.getAttribute('data-shop');
+                button.className = shopName === currentShop
+                    ? 'px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium rounded-full transition duration-150 transform hover:scale-105 bg-indigo-600 text-white shadow-md'
+                    : 'px-3 py-1.5 sm:px-4 sm:py-2 text-sm font-medium rounded-full transition duration-150 transform hover:scale-105 bg-gray-200 text-gray-800 hover:bg-gray-300';
+            });
+        }
+
+        // --- Gestione Input (Auto-cancellazione dello zero) ---
+        
+        function clearOnFocus(input) {
+            // Cancella il valore solo se è 0 o '0.00'
+            if (parseFloat(input.value) === 0) {
+                input.value = '';
+            }
+        }
+        
+        function resetOnBlur(input, type) {
+            if (input.value === '' || isNaN(parseFloat(input.value))) {
+                input.value = (type === 'fund') ? '0.00' : '0';
+                // Aggiorna il dato a 0 se il campo viene lasciato vuoto
+                if (type === 'fund') {
+                    updateFund(0);
+                } else {
+                    updateQuantity(input.id.replace('den-', ''), 0);
+                }
+            }
+        }
+
+        function updateQuantity(valueKey, quantityStr) {
+            const quantity = parseInt(quantityStr || '0', 10);
+            registerData.denominations[valueKey] = Math.max(0, quantity);
+            calculateTotals();
+            saveData();
+        }
+
+        function updateFund(fundStr) {
+            const fund = parseFloat(fundStr || '0');
+            registerData.fund = Math.max(0, fund);
+            calculateTotals();
+            saveData();
+        }
+
+        function resetRegister() {
+            ALL_DENOMINATIONS.forEach(val => registerData.denominations[val] = 0);
+            registerData.fund = 0;
+            updateUI();
+            saveData();
+            setStatus('Cassa azzerata con successo e dati salvati.', 'success');
+        }
+
+        // --- Inizializzazione Viste ---
+
+        function createDenominationInputs() {
+            const grid = document.getElementById('denominations-grid');
+            grid.innerHTML = '';
+            
+            const denominations = [
+                ...COIN_VALUES.map(v => ({ value: v, type: 'coin', color: 'bg-indigo-50', text: 'Moneta' })),
+                ...BANKNOTE_VALUES.map(v => ({ value: v, type: 'note', color: 'bg-purple-50', text: 'Banconota' }))
+            ];
+
+            denominations.forEach(({ value, type, color }) => {
+                const valueKey = value.toString();
+                const div = document.createElement('div');
+                div.className = `p-3 ${color} rounded-lg shadow-sm`;
+                div.innerHTML = `
+                    <label for="den-${valueKey}" class="block text-sm font-medium text-gray-600 mb-1">
+                        ${formatValue(value)} €
+                    </label>
+                    <input
+                        id="den-${valueKey}"
+                        type="number"
+                        min="0"
+                        value="0"
+                        onfocus="clearOnFocus(this)"
+                        onblur="resetOnBlur(this, 'denominations')"
+                        oninput="updateQuantity('${valueKey}', this.value)"
+                        class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 text-gray-800"
+                    >
+                `;
+                grid.appendChild(div);
+            });
+        }
+
+        function createShopButtons() {
+            const selector = document.getElementById('shop-selector');
+            selector.innerHTML = '';
+            SHOP_NAMES.forEach(name => {
+                const button = document.createElement('button');
+                button.setAttribute('data-shop', name);
+                button.textContent = name;
+                button.onclick = () => loadData(name);
+                selector.appendChild(button);
+            });
+            updateShopButtons(); // Aggiorna le classi iniziali
+        }
+
+        // --- Caricamento Iniziale ---
+        window.onload = function() {
+            createShopButtons();
+            createDenominationInputs();
+            // Carica i dati del primo negozio all'avvio
+            loadData(SHOP_NAMES[0]);
+        };
+
+    </script>
+</body>
+</html>
