@@ -44,8 +44,16 @@
                 Cassa Attuale (<span id="current-shop-display">Montesarchio</span>)
             </h2>
 
-            <div id="denominations-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                <!-- Gli input vengono aggiunti qui dal JavaScript -->
+            <!-- Sezione Monete -->
+            <h3 class="text-xl font-bold text-indigo-700 mb-3 mt-6">Conteggio Monete (da 0.05€ a 2.00€)</h3>
+            <div id="coins-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <!-- Gli input per le monete verranno aggiunti qui -->
+            </div>
+            
+            <!-- Sezione Banconote -->
+            <h3 class="text-xl font-bold text-purple-700 mb-3 mt-8 border-t pt-6">Conteggio Banconote (da 5€ a 100€)</h3>
+            <div id="banknotes-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <!-- Gli input per le banconote verranno aggiunti qui -->
             </div>
 
             <!-- 2. Totali Cassa -->
@@ -121,8 +129,10 @@
         // --- Configurazione Iniziale ---
         // Nomi dei negozi aggiornati su richiesta dell'utente
         const SHOP_NAMES = ['Montesarchio', 'Benevento', 'Rotondi'];
+        // Monete da 0.05€ a 2.00€
         const COIN_VALUES = [0.05, 0.10, 0.20, 0.50, 1.00, 2.00];
-        const BANKNOTE_VALUES = [5, 10, 20, 50];
+        // Banconote da 5€ a 100€ (aggiunto il taglio da 100€)
+        const BANKNOTE_VALUES = [5, 10, 20, 50, 100]; 
         const ALL_DENOMINATIONS = [...COIN_VALUES, ...BANKNOTE_VALUES].map(v => v.toString());
         
         let currentShop = SHOP_NAMES[0];
@@ -145,7 +155,14 @@
         
         function formatValue(value) {
             const num = parseFloat(value);
-            return num >= 1 ? num.toFixed(0) : num.toFixed(2).replace('0.', '').padEnd(2, '0');
+            // Per le monete inferiori a 1€, visualizza il valore senza '0.' (es. 0.50 -> 50)
+            if (num < 1 && num > 0) {
+                 // Converte 0.05 in '5' e 0.5 in '50'
+                const cents = Math.round(num * 100); 
+                return cents.toString();
+            }
+            // Per monete/banconote intere, visualizza solo il numero intero
+            return num.toFixed(0);
         }
 
         function setStatus(message, type) {
@@ -186,6 +203,17 @@
                     // Assicurati che tutti i campi esistano
                     if (!registerData.denominations) registerData.denominations = defaultDenominations;
                     if (registerData.fund === undefined) registerData.fund = 0;
+                    
+                    // Cleanup e ricalibrazione dopo l'aggiornamento delle denominazioni
+                    const newDenominations = {};
+                    ALL_DENOMINATIONS.forEach(val => {
+                        // Se il vecchio dato esiste, usalo, altrimenti usa 0
+                        newDenominations[val] = registerData.denominations[val] !== undefined 
+                            ? registerData.denominations[val] 
+                            : 0;
+                    });
+                    registerData.denominations = newDenominations;
+
                 } catch (e) {
                     console.error("Errore nel parsing dei dati salvati", e);
                     registerData = { denominations: defaultDenominations, fund: 0 };
@@ -205,12 +233,14 @@
             let totalCoins = 0;
             let totalBanknotes = 0;
 
+            // Calcolo Monete
             for (const value of COIN_VALUES) {
                 const key = value.toString();
                 const quantity = registerData.denominations[key] || 0;
                 totalCoins += quantity * value;
             }
 
+            // Calcolo Banconote
             for (const value of BANKNOTE_VALUES) {
                 const key = value.toString();
                 const quantity = registerData.denominations[key] || 0;
@@ -310,21 +340,20 @@
         // --- Inizializzazione Viste ---
 
         function createDenominationInputs() {
-            const grid = document.getElementById('denominations-grid');
-            grid.innerHTML = '';
+            // Prepara i contenitori
+            const coinsGrid = document.getElementById('coins-grid');
+            const banknotesGrid = document.getElementById('banknotes-grid');
+            coinsGrid.innerHTML = '';
+            banknotesGrid.innerHTML = '';
             
-            const denominations = [
-                ...COIN_VALUES.map(v => ({ value: v, type: 'coin', color: 'bg-indigo-50', text: 'Moneta' })),
-                ...BANKNOTE_VALUES.map(v => ({ value: v, type: 'note', color: 'bg-purple-50', text: 'Banconota' }))
-            ];
-
-            denominations.forEach(({ value, type, color }) => {
+            // Crea gli input per le monete
+            COIN_VALUES.forEach(value => {
                 const valueKey = value.toString();
                 const div = document.createElement('div');
-                div.className = `p-3 ${color} rounded-lg shadow-sm`;
+                div.className = `p-3 bg-indigo-50 rounded-lg shadow-sm`;
                 div.innerHTML = `
                     <label for="den-${valueKey}" class="block text-sm font-medium text-gray-600 mb-1">
-                        ${formatValue(value)} €
+                        ${formatValue(value)} c.
                     </label>
                     <input
                         id="den-${valueKey}"
@@ -337,7 +366,30 @@
                         class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 text-gray-800"
                     >
                 `;
-                grid.appendChild(div);
+                coinsGrid.appendChild(div);
+            });
+
+            // Crea gli input per le banconote
+            BANKNOTE_VALUES.forEach(value => {
+                const valueKey = value.toString();
+                const div = document.createElement('div');
+                div.className = `p-3 bg-purple-50 rounded-lg shadow-sm`;
+                div.innerHTML = `
+                    <label for="den-${valueKey}" class="block text-sm font-medium text-gray-600 mb-1">
+                        ${formatValue(value)} €
+                    </label>
+                    <input
+                        id="den-${valueKey}"
+                        type="number"
+                        min="0"
+                        value="0"
+                        onfocus="clearOnFocus(this)"
+                        onblur="resetOnBlur(this, 'denominations')"
+                        oninput="updateQuantity('${valueKey}', this.value)"
+                        class="w-full p-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500 transition duration-150 text-gray-800"
+                    >
+                `;
+                banknotesGrid.appendChild(div);
             });
         }
 
