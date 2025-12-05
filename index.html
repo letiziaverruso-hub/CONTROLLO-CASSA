@@ -79,7 +79,10 @@
             <h2 class="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">
                 Calcolo Incasso Giornaliero
             </h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
+            
+            <!-- Input per Fondo Cassa e Pagamento Elettronico -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                
                 <!-- Fondo Cassa Input -->
                 <div class="p-4 bg-yellow-50 rounded-lg shadow-md">
                     <label for="cash-fund-input" class="block text-lg font-medium text-yellow-800 mb-2">
@@ -97,11 +100,29 @@
                         class="w-full p-3 border-2 border-yellow-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 transition duration-150 text-xl font-bold text-gray-800"
                     >
                 </div>
+                
+                <!-- Pagamento Elettronico Input -->
+                <div class="p-4 bg-blue-50 rounded-lg shadow-md">
+                    <label for="electronic-payment-input" class="block text-lg font-medium text-blue-800 mb-2">
+                        Pagamento Elettronico (POS, App, ecc.) (€)
+                    </label>
+                    <input
+                        id="electronic-payment-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value="0"
+                        onfocus="clearOnFocus(this)"
+                        onblur="resetOnBlur(this, 'electronic')"
+                        oninput="updateElectronicPayment(this.value)"
+                        class="w-full p-3 border-2 border-blue-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 text-xl font-bold text-gray-800"
+                    >
+                </div>
 
                 <!-- Incasso Giornaliero Output -->
-                <div class="p-4 bg-red-100 rounded-lg shadow-md">
+                <div class="p-4 bg-red-100 rounded-lg shadow-md md:col-span-1">
                     <p class="text-lg font-medium text-red-800 mb-2">
-                        Incasso del Giorno (Totale Cassa - Fondo)
+                        Incasso Totale del Giorno (Cassa - Fondo + Elettronico)
                     </p>
                     <p id="daily-earnings" class="text-4xl font-extrabold text-red-900">
                         0,00 €
@@ -118,10 +139,36 @@
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     Azzeramento Dati
                 </button>
+                <!-- NUOVO PULSANTE RIEPILOGO -->
+                <button
+                    onclick="showSummary()"
+                    class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transform transition duration-200 hover:scale-105 active:scale-95 flex items-center"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-4m3 0V7m3 7h-6m7 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Visualizza Riepilogo
+                </button>
             </div>
             
             <div id="status-message" class="mt-4 p-3 rounded-lg text-sm font-medium text-center hidden"></div>
 
+        </div>
+    </div>
+    
+    <!-- Modal Riepilogo (Mobile-Optimized) -->
+    <div id="summary-modal" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-50 hidden overflow-y-auto" onclick="event.target.id === 'summary-modal' && hideSummary()">
+        <div class="max-w-xl mx-auto my-4 p-4 bg-white rounded-lg shadow-2xl relative w-11/12">
+            <button onclick="hideSummary()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-900 p-1 rounded-full bg-gray-100">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h2 class="text-xl font-bold text-indigo-700 border-b pb-2 mb-4">Riepilogo Cassa: <span id="summary-shop-name"></span></h2>
+            
+            <div id="summary-content" class="space-y-4">
+                <!-- I contenuti saranno iniettati qui dal JS -->
+            </div>
+
+            <button onclick="hideSummary()" class="mt-6 w-full py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300">
+                Chiudi
+            </button>
         </div>
     </div>
 
@@ -137,10 +184,11 @@
         
         let currentShop = SHOP_NAMES[0];
         
-        // Struttura dati per un singolo negozio
+        // Struttura dati per un singolo negozio - AGGIUNTO 'electronicPayment'
         let registerData = {
             denominations: {}, // Es: {'1': 5, '0.5': 2}
-            fund: 0
+            fund: 0,
+            electronicPayment: 0 // Nuovo campo
         };
 
         // --- Funzioni di Utility ---
@@ -155,13 +203,7 @@
         
         function formatValue(value) {
             const num = parseFloat(value);
-            // Per le monete inferiori a 1€, visualizza il valore senza '0.' (es. 0.50 -> 50)
-            if (num < 1 && num > 0) {
-                 // Converte 0.05 in '5' e 0.5 in '50'
-                const cents = Math.round(num * 100); 
-                return cents.toString();
-            }
-            // Per monete/banconote intere, visualizza solo il numero intero
+            // Per le banconote, visualizza solo il numero intero (5, 10, 20, 50, 100)
             return num.toFixed(0);
         }
 
@@ -203,6 +245,8 @@
                     // Assicurati che tutti i campi esistano
                     if (!registerData.denominations) registerData.denominations = defaultDenominations;
                     if (registerData.fund === undefined) registerData.fund = 0;
+                    // Inizializza il nuovo campo se non esiste
+                    if (registerData.electronicPayment === undefined) registerData.electronicPayment = 0;
                     
                     // Cleanup e ricalibrazione dopo l'aggiornamento delle denominazioni
                     const newDenominations = {};
@@ -216,10 +260,10 @@
 
                 } catch (e) {
                     console.error("Errore nel parsing dei dati salvati", e);
-                    registerData = { denominations: defaultDenominations, fund: 0 };
+                    registerData = { denominations: defaultDenominations, fund: 0, electronicPayment: 0 };
                 }
             } else {
-                registerData = { denominations: defaultDenominations, fund: 0 };
+                registerData = { denominations: defaultDenominations, fund: 0, electronicPayment: 0 };
             }
 
             // Aggiorna l'UI
@@ -249,7 +293,12 @@
 
             // Arrotonda per correggere gli errori di floating point in JS
             const grandTotal = Math.round((totalCoins + totalBanknotes) * 100) / 100;
-            const dailyEarnings = Math.round((grandTotal - registerData.fund) * 100) / 100;
+            
+            // CALCOLO INCASSO TOTALE AGGIORNATO: (Totale Cassa - Fondo) + Pagamento Elettronico
+            const dailyEarnings = Math.round(
+                ((grandTotal - registerData.fund) + registerData.electronicPayment) * 100
+            ) / 100;
+
 
             // Aggiorna i display
             document.getElementById('total-coins').textContent = formatCurrency(totalCoins);
@@ -278,6 +327,12 @@
             if (fundInput) {
                 fundInput.value = registerData.fund.toFixed(2);
             }
+            
+            // Aggiorna l'input del pagamento elettronico
+            const electronicInput = document.getElementById('electronic-payment-input');
+            if (electronicInput) {
+                electronicInput.value = registerData.electronicPayment.toFixed(2);
+            }
 
             // Ricalcola e aggiorna i totali
             calculateTotals();
@@ -305,10 +360,13 @@
         
         function resetOnBlur(input, type) {
             if (input.value === '' || isNaN(parseFloat(input.value))) {
-                input.value = (type === 'fund') ? '0.00' : '0';
+                input.value = (type === 'denominations') ? '0' : '0.00';
+                
                 // Aggiorna il dato a 0 se il campo viene lasciato vuoto
                 if (type === 'fund') {
                     updateFund(0);
+                } else if (type === 'electronic') {
+                    updateElectronicPayment(0);
                 } else {
                     updateQuantity(input.id.replace('den-', ''), 0);
                 }
@@ -328,14 +386,146 @@
             calculateTotals();
             saveData();
         }
+        
+        // Funzione: Aggiorna il Pagamento Elettronico
+        function updateElectronicPayment(paymentStr) {
+            const payment = parseFloat(paymentStr || '0');
+            registerData.electronicPayment = Math.max(0, payment);
+            calculateTotals();
+            saveData();
+        }
 
         function resetRegister() {
             ALL_DENOMINATIONS.forEach(val => registerData.denominations[val] = 0);
             registerData.fund = 0;
+            registerData.electronicPayment = 0; // Azzera anche il pagamento elettronico
             updateUI();
             saveData();
             setStatus('Cassa azzerata con successo e dati salvati.', 'success');
         }
+
+        // --- Logica Riepilogo Mobile ---
+
+        function hideSummary() {
+            document.getElementById('summary-modal').classList.add('hidden');
+        }
+
+        function showSummary() {
+            const modal = document.getElementById('summary-modal');
+            const contentDiv = document.getElementById('summary-content');
+            const shopNameSpan = document.getElementById('summary-shop-name');
+            
+            shopNameSpan.textContent = currentShop;
+
+            // 1. Calcoli (ripetuti per sicurezza)
+            let totalCoins = 0;
+            let totalBanknotes = 0;
+            
+            const coinDetails = [];
+            COIN_VALUES.forEach(value => {
+                const key = value.toString();
+                const quantity = registerData.denominations[key] || 0;
+                const subtotal = Math.round(quantity * value * 100) / 100;
+                totalCoins += subtotal;
+                if (quantity > 0) {
+                    // Formato per monete (0.05, 0.10, 1.00)
+                    coinDetails.push({ value: value.toFixed(2), quantity, subtotal: formatCurrency(subtotal) });
+                }
+            });
+
+            const banknoteDetails = [];
+            BANKNOTE_VALUES.forEach(value => {
+                const key = value.toString();
+                const quantity = registerData.denominations[key] || 0;
+                const subtotal = Math.round(quantity * value * 100) / 100;
+                totalBanknotes += subtotal;
+                if (quantity > 0) {
+                    // Formato per banconote (5, 10, 20)
+                    banknoteDetails.push({ value: value.toFixed(0), quantity, subtotal: formatCurrency(subtotal) });
+                }
+            });
+
+            const grandTotal = Math.round((totalCoins + totalBanknotes) * 100) / 100;
+            const dailyEarnings = Math.round(
+                ((grandTotal - registerData.fund) + registerData.electronicPayment) * 100
+            ) / 100;
+
+
+            // 2. Generazione HTML del Riepilogo
+            let html = `
+                <!-- Sezione Totali Generali e Incasso -->
+                <div class="bg-gray-100 p-3 rounded-lg text-xs grid grid-cols-2 gap-2 font-semibold shadow-inner">
+                    <p class="text-gray-700">Totale Cassa (Contanti):</p>
+                    <p class="text-right text-green-700 text-base font-extrabold">${formatCurrency(grandTotal)}</p>
+                    
+                    <p class="text-gray-700">Fondo Cassa Iniziale:</p>
+                    <p class="text-right">${formatCurrency(registerData.fund)}</p>
+
+                    <p class="text-gray-700">Pagamento Elettronico:</p>
+                    <p class="text-right text-blue-700">${formatCurrency(registerData.electronicPayment)}</p>
+
+                    <div class="col-span-2 border-t mt-2 pt-2"></div>
+
+                    <p class="text-gray-900 font-bold text-sm">INCASSO TOTALE DEL GIORNO:</p>
+                    <p class="text-right text-red-700 font-bold text-lg">${formatCurrency(dailyEarnings)}</p>
+                </div>
+            `;
+            
+            // 3. Dettaglio Contanti
+            html += `
+                <div class="border-t pt-4">
+                    <h3 class="text-sm font-bold text-gray-800 mb-2 uppercase">Dettaglio Contanti</h3>
+                    <div class="grid grid-cols-3 gap-1 text-xs font-semibold text-gray-600 bg-gray-200 p-2 rounded-t-lg">
+                        <span>Taglio (€)</span>
+                        <span class="text-center">Quantità</span>
+                        <span class="text-right">Totale</span>
+                    </div>
+                    <div class="max-h-64 overflow-y-auto border border-gray-200 rounded-b-lg">
+            `;
+
+            // Monete
+            if (coinDetails.length > 0 || totalCoins > 0) {
+                html += `<div class="p-2 bg-indigo-100 font-bold text-xs text-indigo-700 border-b">Monete: ${formatCurrency(totalCoins)}</div>`;
+                coinDetails.forEach(item => {
+                    html += `
+                        <div class="grid grid-cols-3 gap-1 p-2 border-b border-gray-100 text-xs">
+                            <span>${item.value}</span>
+                            <span class="text-center">${item.quantity}</span>
+                            <span class="text-right">${item.subtotal}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            // Banconote
+            if (banknoteDetails.length > 0 || totalBanknotes > 0) {
+                html += `<div class="p-2 bg-purple-100 font-bold text-xs text-purple-700 border-t border-b">Banconote: ${formatCurrency(totalBanknotes)}</div>`;
+                banknoteDetails.forEach(item => {
+                    html += `
+                        <div class="grid grid-cols-3 gap-1 p-2 border-b border-gray-100 text-xs">
+                            <span>${item.value}</span>
+                            <span class="text-center">${item.quantity}</span>
+                            <span class="text-right">${item.subtotal}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            // Messaggio se non ci sono contanti
+            if (coinDetails.length === 0 && banknoteDetails.length === 0) {
+                 html += `<div class="p-4 text-center text-gray-500 text-sm">Nessuna denominazione contata.</div>`;
+            }
+
+            html += `
+                    </div> <!-- fine max-h-64 -->
+                </div>
+            `;
+
+
+            contentDiv.innerHTML = html;
+            modal.classList.remove('hidden');
+        }
+
 
         // --- Inizializzazione Viste ---
 
@@ -349,11 +539,13 @@
             // Crea gli input per le monete
             COIN_VALUES.forEach(value => {
                 const valueKey = value.toString();
+                // Formatta il valore come valuta Euro (es. 0.05, 0.10, 1.00)
+                const displayValue = value.toFixed(2); 
                 const div = document.createElement('div');
                 div.className = `p-3 bg-indigo-50 rounded-lg shadow-sm`;
                 div.innerHTML = `
                     <label for="den-${valueKey}" class="block text-sm font-medium text-gray-600 mb-1">
-                        ${formatValue(value)} c.
+                        ${displayValue} €
                     </label>
                     <input
                         id="den-${valueKey}"
@@ -372,11 +564,13 @@
             // Crea gli input per le banconote
             BANKNOTE_VALUES.forEach(value => {
                 const valueKey = value.toString();
+                // Per le banconote, usa il formato intero semplice
+                const displayValue = formatValue(value); 
                 const div = document.createElement('div');
                 div.className = `p-3 bg-purple-50 rounded-lg shadow-sm`;
                 div.innerHTML = `
                     <label for="den-${valueKey}" class="block text-sm font-medium text-gray-600 mb-1">
-                        ${formatValue(value)} €
+                        ${displayValue} €
                     </label>
                     <input
                         id="den-${valueKey}"
